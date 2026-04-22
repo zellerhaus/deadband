@@ -1,100 +1,83 @@
-# Pin Map — DRAFT
+# Pin Map
 
-Status: **not yet defined.** Finalize before `hardware.py` is written.
+Target: Raspberry Pi Pico 2 W (RP2350).
 
-## Pico 2 W budget
+## Assignment
 
-- 26 exposed GPIOs (GP0–GP22, GP26–GP28 — GP23/GP24/GP25/GP29 are reserved by the W module for Wi-Fi/Bluetooth/LED/ADC_VSYS)
-- 8 PWM slices, each with two channels (A/B). Two outputs on the same channel share frequency/duty; two on the same slice but different channels share frequency only
-- 3 ADC-capable pins (GP26, GP27, GP28)
-
-## Input count (worst case, one pin per contact)
-
-| Component | Contacts needed | Notes |
-|---|---|---|
-| `toggle_1` | 1 | SPST to ground, internal pull-up |
-| `toggle_2` | 1 | SPST to ground, internal pull-up |
-| `paddle` (switch) | 1 | SPST to ground |
-| `button` (press) | 1 | Momentary to ground |
-| `encoder` (A/B) | 2 | Quadrature — use `rotaryio.IncrementalEncoder` |
-| `encoder` (press) | 1 | Momentary to ground |
-| `rotary` (12-position) | see below | |
-
-**Subtotal without rotary: 7 inputs.**
-
-## 12-position rotary: three wiring strategies
-
-Decision needed. Tradeoffs below.
-
-### Option A — One GPIO per position (12 inputs)
-
-Simple, robust, debounces cleanly via `keypad.Keys`. Pin cost: 12. Total inputs: 19. Total with 2 LEDs: 21.
-
-Fits the budget but eats the majority of available pins. Leaves no headroom for a future Maker Port breakout, status LEDs, or expansion.
-
-### Option B — Resistor ladder on ADC (1 input) ★ recommended
-
-Each rotary position connects a different total resistance between the ADC pin and ground/Vcc. Software maps the ADC reading to a position 1–12.
-
-Pin cost: 1 (ADC). Total inputs: 8. Total with 2 LEDs: 10.
-
-Downside: requires a small ladder PCB or resistors wired to the rotary lugs. Positions are distinguishable if the resistor values are chosen with enough margin (e.g. binary-weighted across the ADC range, 12 levels across 0–65535 leaves ~5400 counts between positions — plenty).
-
-### Option C — Gray-code encoded (4 inputs)
-
-If the rotary part supports BCD/Gray encoding natively. Alpha Taiwan SR2611 and similar do not (they're single-pole multi-throw). Would require an external encoder IC like a 74HC148 or a small MCU-side decoder.
-
-Pin cost: 4. Complexity: medium. Probably not worth it vs Option B.
-
-**Recommendation: Option B (resistor ladder on ADC, 1 pin).** Saves 11 GPIOs for future expansion. Circuit is trivial.
-
-## LEDs
-
-Two PWM outputs driving MOSFET gates for the 12V paddle and button LEDs.
-
-- `paddle.led` — 1 PWM pin
-- `button.led` — 1 PWM pin
-
-Put them on different PWM slices so animations are independent (different frequency/period possible).
-
-## Proposed assignment (pending hardware validation)
-
-This is a first-draft placement; verify against the Pico 2 W pinout and any Pico 2 W-specific reservations.
+12-position rotary uses a resistor ladder on ADC0. See [12-position rotary](#12-position-rotary-resistor-ladder-on-adc) for the rationale.
 
 ```
-Input (digital, pull-up to 3V3, switch to GND):
+Input (digital, internal pull-up, switch to GND):
   GP2   toggle_1
   GP3   toggle_2
-  GP4   paddle  (switch)
-  GP5   button  (press)
+  GP4   paddle (switch)
+  GP5   button (press)
   GP10  encoder A
   GP11  encoder B
   GP12  encoder press
 
 Input (analog):
-  GP26  rotary  (12-position resistor ladder on ADC0)
+  GP26  rotary (12-pos resistor ladder, ADC0)
 
-Output (PWM to MOSFET gate):
+Output (PWM → MOSFET gate, 12V LED on drain):
   GP14  paddle.led   (PWM slice 7A)
   GP15  button.led   (PWM slice 7B)
-
-  # NOTE: GP14/GP15 are on the same PWM slice (7).
-  # Same slice means same frequency, but channel A and B
-  # have independent duty cycles — which is all we need for
-  # brightness control. If we want different pulse frequencies,
-  # move one LED to a different slice, e.g. GP16 (slice 0A).
 ```
 
-**Open questions:**
+Total: 8 digital inputs + 1 analog input + 2 PWM outputs = 11 pins used. 15 GPIOs free for expansion (e.g. a future Maker Port breakout).
 
-- Confirm Pico 2 W's exact Wi-Fi/BT reservations — RP2350 + CYW43439 may differ from RP2040 Pico W
-- Confirm encoder pin pair A/B is on a valid `rotaryio` pair (adjacent pins, no special constraints on RP2350)
-- Decide: same PWM slice for both LEDs, or separate slices?
-- Resistor ladder values for the 12-position rotary — pick after Option B is confirmed
+## Pico 2 W budget
 
-## Notes for schematic
+- 26 exposed GPIOs (GP0–GP22, GP26–GP28). GP23/GP24/GP25/GP29 are reserved by the W module for Wi-Fi/Bluetooth/LED/ADC_VSYS — confirm against the Pico 2 W datasheet (RP2350 + CYW43439 may differ from the RP2040 Pico W)
+- 12 PWM slices, each with two channels (A/B). Outputs on the same slice share frequency; channel duties are independent
+- 4 ADC-capable pins on RP2350 (GP26–GP29; note GP29 is reserved on the W module)
 
-- Every input pin uses internal pull-up (`Pull.UP`); switches tie to GND when actuated
-- 100 nF ceramic cap across each mechanical contact helps debounce; software debouncing via `keypad.Keys` is the backstop
-- MOSFETs: 2N7000 (TO-92) or AO3400 (SOT-23), gate drive direct from GPIO, 10k gate-to-source pull-down to prevent accidental turn-on during reset
-- 12V rail for LEDs comes from a separate DC input or a boost converter, not from USB
+## 12-position rotary: resistor ladder on ADC
+
+A linear resistor ladder between 3V3 and GND; each rotary position taps a different node. The ADC reads the wiper voltage; software maps the 16-bit reading to a position 1–12.
+
+With 12 equally-spaced levels across the 16-bit ADC range (0–65535), positions are ~5460 counts apart. Hysteresis of ±500 counts (~±0.75%) absorbs noise without risk of ambiguous reads.
+
+**Suggested values (finalize after prototype):**
+
+- `R_top`: 10 kΩ from 3V3 to position 12
+- `R_step`: 1 kΩ between each adjacent position (11 total)
+- Rotary common connects to the ADC pin
+- Position 1 connects to GND through the final step
+
+**Firmware side:**
+
+- Sample ADC at 20 Hz (rotary is a slow control — no need for faster)
+- Median-of-3 samples to suppress crosstalk and noise
+- Compare against 12 pre-computed midpoint thresholds
+- Apply hysteresis of ±3% of ADC range on each boundary
+
+## LEDs
+
+Two PWM outputs driving MOSFET gates for the 12V paddle and button LEDs. GP14 and GP15 are paired on PWM slice 7 (channels A and B respectively) — they share frequency but have independent duty cycles, which is all that brightness control and smooth pulsing require.
+
+If a future firmware needs different *pulse frequencies* on the two LEDs (e.g. one at 1 Hz breathing, one at 3 Hz blinking), move `button.led` to a different slice. GP16 (slice 0A) is a clean alternative.
+
+## Schematic notes
+
+- Every digital input uses `Pull.UP`; actuation ties the pin to GND
+- 100 nF ceramic cap across each mechanical contact for passive debounce (software debouncing via `keypad.Keys` is the primary mechanism)
+- MOSFETs for LEDs: 2N7000 (TO-92) or AO3400 (SOT-23)
+- 10 kΩ gate-to-source pull-down on each MOSFET to hold it off during reset
+- 12V rail for the LEDs comes from a separate DC input, not USB VBUS
+
+## Verification still needed
+
+- Pico 2 W GPIO reservations — confirm which pins are exposed on the final module pinout, and whether any RP2350-specific functions take priority on GP14/GP15/GP26
+- `rotaryio.IncrementalEncoder` pair validity — GP10/GP11 need to be a contiguous pair with no RP2350-specific exclusions
+- Resistor ladder tolerance — 1% resistors at 1 kΩ × 12 steps have enough margin; confirm against the prototype's actual readings
+
+## Considered alternatives (rotary wiring)
+
+### Option A — one GPIO per position
+
+12 digital inputs, one per position, with the rotary's common to GND. `keypad.Keys` debounces cleanly. Eats 12 of 26 GPIOs. Rejected to preserve headroom for future expansion.
+
+### Option C — external priority encoder (74HC148)
+
+Collapses 12 inputs to 4 outputs via an external chip. Adds a component and board area for no functional gain over the resistor ladder. Rejected as over-engineered.
