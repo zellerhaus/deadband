@@ -35,9 +35,15 @@ if ok:
     print("  IP:     ", wifi.radio.ipv4_address)
     mac = ":".join("{:02x}".format(b) for b in wifi.radio.mac_address)
     print("  MAC:    ", mac)
-    if wifi.radio.ap_info is not None:
-        print("  RSSI:   ", wifi.radio.ap_info.rssi, "dBm")
-        print("  Channel:", wifi.radio.ap_info.channel)
+    # ap_info isn't implemented on every CircuitPython port yet
+    # (notably Pico 2 W as of 10.2). Treat its absence as informational.
+    try:
+        info = wifi.radio.ap_info
+        if info is not None:
+            print("  RSSI:   ", info.rssi, "dBm")
+            print("  Channel:", info.channel)
+    except (NotImplementedError, AttributeError):
+        pass
 else:
     print("Failed - check secrets.py.")
 
