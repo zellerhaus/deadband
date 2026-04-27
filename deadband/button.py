@@ -1,17 +1,20 @@
-"""Button gesture state machine.
+"""Illuminated momentary pushbutton.
 
 `ButtonGestureEngine` is the pure-Python, hardware-agnostic core of the
 button and encoder-press gesture suites. It interprets raw press/release
 edges as click / double-click / triple-click / hold / long-click events,
 including the auto-delay disambiguation specified in design decision #1.
 
-The hardware-facing `Button` class (and its encoder sibling) wraps this
-engine with `keypad.Keys` for debounced edges and `pwmio.PWMOut` for
-the LED. Those wrappers arrive when the Pico 2 W is in the loop.
+`Button` is the hardware wrapper. It composes `SwitchEngine` for press
+debouncing and `ButtonGestureEngine` for the gesture suite. The `.led`
+attribute is reserved for the LED implementation, which lands with
+`led.py` once the panel's MOSFET driver stage is wired through.
 
 Keeping the engine hardware-free means the entire gesture semantic —
 the most subtle part of the API — is exercised off-device by pytest.
 """
+
+from .switch import SwitchEngine
 
 
 class ButtonGestureEngine:
@@ -170,3 +173,93 @@ class ButtonGestureEngine:
             for fn in self._triple_click_cbs:
                 fn()
         # count >= 4: over-clicked, no canonical interpretation.
+
+
+# ---------------------------------------------------------------------
+# Hardware wrapper. `digitalio` is import-guarded so this module stays
+# importable off-device for the engine tests above.
+# ---------------------------------------------------------------------
+
+try:
+    import digitalio
+    _HAS_DIGITALIO = True
+except ImportError:
+    _HAS_DIGITALIO = False
+
+
+class Button:
+    """Hardware-backed momentary pushbutton with full gesture suite.
+
+    Composes `SwitchEngine` for press debouncing and
+    `ButtonGestureEngine` for click / double-click / triple-click /
+    hold / long-click gestures. Press is active-low with internal
+    pull-up.
+
+    The `.led` attribute is reserved for the LED implementation. It is
+    `None` until the MOSFET driver stage is wired through and `led.py`
+    is composed in by the eventloop assembly. Callers should treat
+    `if button.led is not None: button.led.blink()` as the conservative
+    pattern until paddle/button LEDs are live.
+
+    Call `tick()` from the main loop. On-device only.
+    """
+
+    def __init__(self, pin_press, now_fn=None, debounce=None):
+        if not _HAS_DIGITALIO:
+            raise RuntimeError(
+                "Button requires CircuitPython's `digitalio` module"
+            )
+        if now_fn is None:
+            import supervisor
+            now_fn = lambda: supervisor.ticks_ms() / 1000
+
+        self._press_io = digitalio.DigitalInOut(pin_press)
+        self._press_io.direction = digitalio.Direction.INPUT
+        self._press_io.pull = digitalio.Pull.UP
+
+        self._gesture = ButtonGestureEngine(now_fn)
+        self._press_switch = SwitchEngine(now_fn, debounce=debounce)
+        self._press_switch.on_turn_on(self._gesture.process_press)
+        self._press_switch.on_turn_off(self._gesture.process_release)
+        self._press_switch.process_state(not self._press_io.value)
+
+        self.led = None
+
+    # -- state queries -------------------------------------------------
+
+    @property
+    def is_pressed(self):
+        return self._gesture.is_pressed
+
+    @property
+    def press_duration(self):
+        return self._gesture.press_duration
+
+    # -- press callbacks (passthrough to ButtonGestureEngine) ----------
+
+    def on_press(self, fn):
+        self._gesture.on_press(fn)
+
+    def on_release(self, fn):
+        self._gesture.on_release(fn)
+
+    def on_click(self, fn, immediate=False):
+        self._gesture.on_click(fn, immediate=immediate)
+
+    def on_hold(self, fn, duration=None):
+        self._gesture.on_hold(fn, duration=duration)
+
+    def on_long_click(self, fn, duration=None):
+        self._gesture.on_long_click(fn, duration=duration)
+
+    def on_double_click(self, fn):
+        self._gesture.on_double_click(fn)
+
+    def on_triple_click(self, fn):
+        self._gesture.on_triple_click(fn)
+
+    # -- main-loop hook ------------------------------------------------
+
+    def tick(self):
+        self._press_switch.process_state(not self._press_io.value)
+        self._gesture.tick()
