@@ -25,7 +25,7 @@ class ButtonGestureEngine:
     is a fake clock under the test's control.
     """
 
-    MULTI_CLICK_WINDOW = 0.3
+    MULTI_CLICK_WINDOW = 0.5
     DEFAULT_HOLD_DURATION = 1.0
 
     def __init__(self, now_fn, multi_click_window=None):

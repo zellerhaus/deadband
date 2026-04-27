@@ -16,6 +16,10 @@ from deadband.button import ButtonGestureEngine
 
 
 def make(clock, **kwargs):
+    # Pin the multi-click window at 0.3s so test timing stays correct
+    # as the production default evolves. The class constant is the
+    # default for shipped firmware; the logic is what tests validate.
+    kwargs.setdefault("multi_click_window", 0.3)
     return ButtonGestureEngine(clock.now, **kwargs)
 
 

@@ -169,7 +169,7 @@ timer.is_active                    # bool: timer still scheduled
 
 ### 1. Click disambiguation: auto-delay
 
-When a firmware registers multi-click handlers alongside `on_click`, the library automatically delays `on_click` firing by the multi-click window (~300ms) so it can distinguish a single click from a double/triple click.
+When a firmware registers multi-click handlers alongside `on_click`, the library automatically delays `on_click` firing by the multi-click window (~500ms) so it can distinguish a single click from a double/triple click.
 
 - **If only `on_click` is registered:** fires immediately on release.
 - **If `on_double_click` or `on_triple_click` is also registered:** `on_click` delays until the multi-click window has closed without additional clicks.
