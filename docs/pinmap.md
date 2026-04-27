@@ -4,14 +4,14 @@ Target: Raspberry Pi Pico 2 W (RP2350).
 
 ## Assignment
 
-12-position rotary uses a resistor ladder on ADC0. See [12-position rotary](#12-position-rotary-resistor-ladder-on-adc) for the rationale.
+Validated on hardware 2026-04-22 against the prototype unit. LED outputs remain planned (board not yet wired through to the MOSFET stage).
 
 ```
 Input (digital, internal pull-up, switch to GND):
-  GP2   toggle_1
-  GP3   toggle_2
-  GP4   paddle (switch)
-  GP5   button (press)
+  GP6   toggle_1
+  GP5   toggle_2
+  GP16  paddle (switch)
+  GP4   button (press)
   GP10  encoder A
   GP11  encoder B
   GP12  encoder press
@@ -19,44 +19,48 @@ Input (digital, internal pull-up, switch to GND):
 Input (analog):
   GP26  rotary (12-pos resistor ladder, ADC0)
 
-Output (PWM → MOSFET gate, 12V LED on drain):
-  GP14  paddle.led   (PWM slice 7A)
-  GP15  button.led   (PWM slice 7B)
+Output (PWM → MOSFET gate, 12V LED on drain) — PLANNED:
+  GP14  paddle.led
+  GP15  button.led
 ```
 
-Total: 8 digital inputs + 1 analog input + 2 PWM outputs = 11 pins used. 15 GPIOs free for expansion (e.g. a future Maker Port breakout).
+`board.LED` (the onboard module LED) is used as a heartbeat / press echo during development.
+
+The canonical bring-up procedure is [`examples/smoke_test.py`](../examples/smoke_test.py) — drop it on the device as `code.py` to verify every input on a freshly assembled unit.
 
 ## Pico 2 W budget
 
-- 26 exposed GPIOs (GP0–GP22, GP26–GP28). GP23/GP24/GP25/GP29 are reserved by the W module for Wi-Fi/Bluetooth/LED/ADC_VSYS — confirm against the Pico 2 W datasheet (RP2350 + CYW43439 may differ from the RP2040 Pico W)
+- 26 exposed GPIOs (GP0–GP22, GP26–GP28). GP23/GP24/GP25/GP29 are reserved by the W module for Wi-Fi/Bluetooth/LED/ADC_VSYS
 - 12 PWM slices, each with two channels (A/B). Outputs on the same slice share frequency; channel duties are independent
-- 4 ADC-capable pins on RP2350 (GP26–GP29; note GP29 is reserved on the W module)
+- 4 ADC-capable pins on RP2350 (GP26–GP29; GP29 reserved on the W module)
 
 ## 12-position rotary: resistor ladder on ADC
 
-A linear resistor ladder between 3V3 and GND; each rotary position taps a different node. The ADC reads the wiper voltage; software maps the 16-bit reading to a position 1–12.
+A resistor ladder between 3V3 and GND; each rotary position taps a different node. The ADC reads the wiper voltage; software maps the 16-bit reading to a position 1–12.
 
-With 12 equally-spaced levels across the 16-bit ADC range (0–65535), positions are ~5460 counts apart. Hysteresis of ±500 counts (~±0.75%) absorbs noise without risk of ambiguous reads.
+The actual ladder doesn't span the full ADC range — it tops out around 32k of 65k, which still gives ~3100 counts of separation between adjacent positions. Plenty.
 
-**Suggested values (finalize after prototype):**
+**Calibrated thresholds (validated 2026-04-22):**
 
-- `R_top`: 10 kΩ from 3V3 to position 12
-- `R_step`: 1 kΩ between each adjacent position (11 total)
-- Rotary common connects to the ADC pin
-- Position 1 connects to GND through the final step
+```python
+ROTARY_THRESHOLDS = (1536, 4640, 7793, 10946, 14083, 17175,
+                     20272, 23415, 26535, 29622, 32747)
+ROTARY_HYSTERESIS = 500  # counts
+```
+
+11 thresholds define the boundaries between 12 positions. The library takes a raw reading and returns the position whose threshold is the first to exceed the reading; if every threshold is below it, the position is 12.
 
 **Firmware side:**
 
-- Sample ADC at 20 Hz (rotary is a slow control — no need for faster)
-- Median-of-3 samples to suppress crosstalk and noise
-- Compare against 12 pre-computed midpoint thresholds
-- Apply hysteresis of ±3% of ADC range on each boundary
+- Sample ADC at ~50 Hz (the smoke test loops at 50 Hz; library can drop to 20 Hz for the rotary specifically)
+- Apply ±500-count hysteresis around boundaries to prevent flicker between adjacent positions
+- The thresholds are unit-specific in principle but, with 1% resistors, identical units should match within tens of counts
 
-## LEDs
+## LEDs (planned)
 
 Two PWM outputs driving MOSFET gates for the 12V paddle and button LEDs. GP14 and GP15 are paired on PWM slice 7 (channels A and B respectively) — they share frequency but have independent duty cycles, which is all that brightness control and smooth pulsing require.
 
-If a future firmware needs different *pulse frequencies* on the two LEDs (e.g. one at 1 Hz breathing, one at 3 Hz blinking), move `button.led` to a different slice. GP16 (slice 0A) is a clean alternative.
+If a future firmware needs different *pulse frequencies* on the two LEDs (e.g. one at 1 Hz breathing, one at 3 Hz blinking), move `button.led` to a different slice. GP16 is in use by the paddle switch, so consider GP17 (slice 0B) or GP18 (slice 1A).
 
 ## Schematic notes
 
@@ -65,12 +69,6 @@ If a future firmware needs different *pulse frequencies* on the two LEDs (e.g. o
 - MOSFETs for LEDs: 2N7000 (TO-92) or AO3400 (SOT-23)
 - 10 kΩ gate-to-source pull-down on each MOSFET to hold it off during reset
 - 12V rail for the LEDs comes from a separate DC input, not USB VBUS
-
-## Verification still needed
-
-- Pico 2 W GPIO reservations — confirm which pins are exposed on the final module pinout, and whether any RP2350-specific functions take priority on GP14/GP15/GP26
-- `rotaryio.IncrementalEncoder` pair validity — GP10/GP11 need to be a contiguous pair with no RP2350-specific exclusions
-- Resistor ladder tolerance — 1% resistors at 1 kΩ × 12 steps have enough margin; confirm against the prototype's actual readings
 
 ## Considered alternatives (rotary wiring)
 
