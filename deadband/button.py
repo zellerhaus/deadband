@@ -263,3 +263,5 @@ class Button:
     def tick(self):
         self._press_switch.process_state(not self._press_io.value)
         self._gesture.tick()
+        if self.led is not None:
+            self.led.tick()

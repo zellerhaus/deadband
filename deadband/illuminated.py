@@ -23,3 +23,8 @@ class IlluminatedSwitch(Switch):
     def __init__(self, pin, now_fn=None, debounce=None):
         super().__init__(pin, now_fn=now_fn, debounce=debounce)
         self.led = None
+
+    def tick(self):
+        super().tick()
+        if self.led is not None:
+            self.led.tick()
