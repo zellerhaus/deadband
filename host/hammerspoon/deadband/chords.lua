@@ -20,14 +20,19 @@ M.HYPER = { "cmd", "ctrl", "alt", "shift" }
 --   1->1  2->2 ... 9->9  10->0  11->-  12->=
 M.ROTARY_KEYS = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" }
 
--- Toggle / paddle chords. Each control sends a distinct key for ON and for OFF,
--- so the host never has to guess resting state.
-M.TOGGLE_1_ON  = "f13"
-M.TOGGLE_1_OFF = "f14"
-M.TOGGLE_2_ON  = "f15"
-M.TOGGLE_2_OFF = "f16"
-M.PADDLE_ON    = "f17"
-M.PADDLE_OFF   = "f18"
+-- Toggle / paddle chords. Each control sends a distinct key for ON and OFF.
+-- Bound by physical keyCode (numbers), NOT character: function keys (F13-F18)
+-- carry an `fn` flag that breaks the match, and character names resolve through
+-- the active keyboard layout (so on Colemak/Dvorak "o" is a different physical
+-- key than the firmware's O). The firmware sends fixed letter HID usages
+-- (U I O P J K) that always land on these keyCodes on every layout. audio.lua
+-- binds these.
+M.TOGGLE_1_ON  = 32  -- U
+M.TOGGLE_1_OFF = 34  -- I
+M.TOGGLE_2_ON  = 31  -- O
+M.TOGGLE_2_OFF = 35  -- P
+M.PADDLE_ON    = 38  -- J
+M.PADDLE_OFF   = 40  -- K
 
 -- Button tap. (Long-press lock is sent natively by the firmware as Cmd+Ctrl+Q
 -- and never reaches Hammerspoon, so it is intentionally absent from this table.)

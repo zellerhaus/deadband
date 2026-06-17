@@ -166,17 +166,28 @@ armed one.
 
 | Gesture | Chord | Bound action |
 |---|---|---|
-| Toggle 1 ON  | Hyper + `F13` | DND on |
-| Toggle 1 OFF | Hyper + `F14` | DND off |
-| Toggle 2 ON  | Hyper + `F15` | Audio output → secondary (Shure MV7) |
-| Toggle 2 OFF | Hyper + `F16` | Audio output → primary (External Headphones) |
-| Rocker ON    | Hyper + `F17` | Mic muted |
-| Rocker OFF   | Hyper + `F18` | Mic unmuted |
+| Toggle 1 ON  | Hyper + `U` | DND on |
+| Toggle 1 OFF | Hyper + `I` | DND off |
+| Toggle 2 ON  | Hyper + `O` | Audio output → secondary (Shure MV7) |
+| Toggle 2 OFF | Hyper + `P` | Audio output → primary (External Headphones) |
+| Rocker ON    | Hyper + `J` | Mic muted |
+| Rocker OFF   | Hyper + `K` | Mic unmuted |
 | Button tap   | Hyper + `Space` | Run the armed launcher |
 | Button long-press | *(native)* | Lock screen — `Command + Control + Q`, sent by the panel. **Not bound by Hammerspoon.** |
 
 The long-press lock is sent natively by the firmware and never reaches
 Hammerspoon. Do not bind `Command + Control + Q` here.
+
+**Why letters, and why bound by keyCode.** The toggle/paddle chords avoid
+function keys (F13–F18): macOS stamps those events with an `fn` flag that breaks
+Hammerspoon's exact-modifier hotkey match, so they silently fall through. The
+host also binds these by **physical keyCode**, not character — `hs.hotkey`
+resolves a character name through the *active keyboard layout*, so on
+Colemak/Dvorak the firmware's letter lands on a different physical key and the
+binding misses. The firmware sends fixed letter HID usages that always map to the
+same keyCodes regardless of layout; `audio.lua` binds those keyCodes
+(`U=32 I=34 O=31 P=35 J=38 K=40`). The rotary digits and Space are layout-stable,
+so they stay bound by character.
 
 ---
 

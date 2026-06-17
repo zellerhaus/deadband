@@ -23,9 +23,9 @@ let this table stay testable on a plain Python interpreter.
 Chord surface (19 Hyper chords + 1 native):
 
     Rotary 1..12          Hyper + 1 2 3 4 5 6 7 8 9 0 - =   (12 chords)
-    toggle_1 ON  / OFF    Hyper + F13 / F14
-    toggle_2 ON  / OFF    Hyper + F15 / F16
-    paddle   ON  / OFF    Hyper + F17 / F18
+    toggle_1 ON  / OFF    Hyper + U / I
+    toggle_2 ON  / OFF    Hyper + O / P
+    paddle   ON  / OFF    Hyper + J / K
     button tap            Hyper + SPACE
     button long-click     Command + Control + Q  (native lock, not Hyper)
 """
@@ -63,10 +63,15 @@ ROTARY_CHORDS = {
 # Each control sends one chord on its ON edge and a different chord on
 # its OFF edge, so the host always knows the exact state, never just that
 # "something flipped".
+#
+# These are plain letter keys, NOT function keys. macOS stamps every
+# function-key event (F13-F18) with an extra `fn` modifier flag, which
+# breaks Hammerspoon's exact-modifier hotkey match — the chord silently
+# falls through. Letters (like the rotary's digits) carry no such flag.
 TOGGLE_CHORDS = {
-    "toggle_1": {"on": "F13", "off": "F14"},
-    "toggle_2": {"on": "F15", "off": "F16"},
-    "paddle": {"on": "F17", "off": "F18"},
+    "toggle_1": {"on": "U", "off": "I"},
+    "toggle_2": {"on": "O", "off": "P"},
+    "paddle": {"on": "J", "off": "K"},
 }
 
 

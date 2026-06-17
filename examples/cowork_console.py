@@ -17,9 +17,9 @@ Control mapping:
     Encoder rotate CCW        Volume down      (native ConsumerControl)
     Encoder click             Play / pause     (native ConsumerControl)
     Rotary (12 positions)     Arm launcher N   (Hyper + N, host dispatches)
-    Toggle 1  ON / OFF        Do Not Disturb   (Hyper + F13 / F14)
-    Toggle 2  ON / OFF        Audio output     (Hyper + F15 / F16)
-    Paddle    ON / OFF        Mic mute  ON=muted (Hyper + F17 / F18)
+    Toggle 1  ON / OFF        Do Not Disturb   (Hyper + U / I)
+    Toggle 2  ON / OFF        Audio output     (Hyper + O / P)
+    Paddle    ON / OFF        Mic mute  ON=muted (Hyper + J / K)
     Button tap                Fire armed launcher (Hyper + Space)
     Button long-click (0.6s)  Lock screen      (native Cmd+Ctrl+Q)
 
@@ -55,6 +55,8 @@ except ImportError as e:
         "adafruit_hid is required. Install with: circup install adafruit_hid"
     ) from e
 
+import supervisor
+
 from deadband import Deadband
 
 import cowork_chords
@@ -83,6 +85,31 @@ def send_chord(chord_names):
 IDLE_BRIGHTNESS = 0.15
 
 
+# -- phantom-press guard -----------------------------------------------
+
+# On this prototype, flipping a toggle couples into the button's GPIO and
+# registers a phantom press — which the gesture engine can resolve into a
+# long-click (lock) or click (dispatch) the user never made. A real button
+# press is never within a few hundred ms of a toggle edge, so we ignore any
+# press that begins inside that window. (The proper fix is hardware: isolate
+# / pull up the button line. This guard masks it.)
+TOGGLE_GUARD_MS = 300
+
+_TICKS_PERIOD = 1 << 29
+_TICKS_HALF = _TICKS_PERIOD // 2
+
+_last_state_change_ms = supervisor.ticks_ms()
+_press_phantom = False
+
+
+def _ticks_since(then_ms):
+    # Wrap-safe elapsed ms using supervisor.ticks_ms (wraps at 2**29).
+    diff = (supervisor.ticks_ms() - then_ms) & (_TICKS_PERIOD - 1)
+    if diff >= _TICKS_HALF:
+        diff -= _TICKS_PERIOD
+    return diff
+
+
 # -- encoder: native media, never via Hammerspoon ----------------------
 
 db.encoder.on_clockwise(lambda: cc.send(ConsumerControlCode.VOLUME_INCREMENT))
@@ -101,6 +128,14 @@ db.encoder.on_click(lambda: print("MEDIA: play/pause"))
 # so the host tracks the exact position, not just a flip.
 def _wire_state(control_name, control):
     def emit(is_on):
+        global _last_state_change_ms, _press_phantom
+        _last_state_change_ms = supervisor.ticks_ms()
+        # If the button reads as held the instant a toggle flips, that press is
+        # coupling from the flip, not a real one. Mark it so its gesture is
+        # ignored. (Covers the case where the button event is seen first too,
+        # via the recency check in _on_button_press.)
+        if db.button.is_pressed:
+            _press_phantom = True
         send_chord(cowork_chords.toggle_chord(control_name, is_on))
         edge = "ON" if is_on else "OFF"
         key = cowork_chords.TOGGLE_CHORDS[control_name]["on" if is_on else "off"]
@@ -134,13 +169,26 @@ db.rotary.on_change(select_launcher)
 # feedback; releasing returns it to idle. A tap (on_click) fires the
 # armed launcher and overrides the release glow with a 5-blink "sent"
 # pulse — so the tap path must run AFTER on_release restores idle.
-db.button.on_press(lambda: db.button.led.on())
+def _on_button_press():
+    global _press_phantom
+    # A press that lands within the guard window of a toggle edge is coupling,
+    # not a real press. Flag it so its resolved gesture is suppressed.
+    _press_phantom = _ticks_since(_last_state_change_ms) < TOGGLE_GUARD_MS
+    db.button.led.on()
+
+
+db.button.on_press(_on_button_press)
 db.button.on_release(lambda: db.button.led.set_brightness(IDLE_BRIGHTNESS))
 
 
 def dispatch():
     # Fire the armed rotary launcher on the host, then flash "sent".
     # This runs after on_release, so the blink supersedes the idle glow.
+    global _press_phantom
+    if _press_phantom:
+        _press_phantom = False
+        print("BUTTON: tap ignored (phantom press coupled from a toggle edge)")
+        return
     send_chord(cowork_chords.button_tap_chord())
     db.button.led.blink(times=5, interval=0.06)
     print("BUTTON: tap -> Hyper+{} (dispatch)".format(cowork_chords.BUTTON_TAP))
@@ -148,6 +196,11 @@ def dispatch():
 
 def lock_screen():
     # Native macOS lock. Does not touch Hammerspoon.
+    global _press_phantom
+    if _press_phantom:
+        _press_phantom = False
+        print("BUTTON: long-click ignored (phantom press coupled from a toggle edge)")
+        return
     send_chord(cowork_chords.LOCK_NATIVE)
     print("BUTTON: long-click -> {} (lock, native)".format(
         "+".join(cowork_chords.LOCK_NATIVE)

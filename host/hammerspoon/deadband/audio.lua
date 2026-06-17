@@ -9,9 +9,11 @@
 -- The firmware sends a Hyper chord for every edge of these controls. This
 -- module binds the matching chords on the host and carries out the action.
 --
---     toggle_1 ON  -> Hyper+F13     toggle_1 OFF -> Hyper+F14
---     toggle_2 ON  -> Hyper+F15     toggle_2 OFF -> Hyper+F16
---     paddle   ON  -> Hyper+F17     paddle   OFF -> Hyper+F18
+--     toggle_1 ON  -> Hyper+U       toggle_1 OFF -> Hyper+I
+--     toggle_2 ON  -> Hyper+O       toggle_2 OFF -> Hyper+P
+--     paddle   ON  -> Hyper+J       paddle   OFF -> Hyper+K
+--
+-- (Bound by physical keyCode, not character — see the KEYS table below for why.)
 --
 -- Reconcile loop: macOS lets other apps and the menu bar move the default
 -- output device or change the mute state behind the panel's back. An
@@ -51,14 +53,25 @@ M.DND = {
   shortcutOff = "Deadband DND Off",
 }
 
--- Chord keys for each control edge (see contract above).
+-- Chord keys for each control edge, bound by PHYSICAL keyCode (numbers), not
+-- character. Two reasons, both learned the hard way:
+--   1. Not function keys (F13-F18): macOS tags those with an `fn` flag that
+--      breaks the Hyper hotkey match, so they fall through (and fell through to
+--      a screen lock).
+--   2. Not character names ("o","p",...): hs.hotkey resolves a character through
+--      the ACTIVE keyboard layout. On Colemak/Dvorak the letter the firmware
+--      sends lands on a different physical key, so a char binding listens on the
+--      wrong key. The firmware sends fixed letter HID usages (U I O P J K) that
+--      always map to these fixed keyCodes regardless of layout, so binding the
+--      keyCode is correct on every layout.
+-- keyCodes: U=32 I=34 O=31 P=35 J=38 K=40
 local KEYS = {
-  dndOn = "f13",
-  dndOff = "f14",
-  outputOn = "f15",
-  outputOff = "f16",
-  micMute = "f17",   -- paddle ON  = muted
-  micLive = "f18",   -- paddle OFF = live
+  dndOn = 32,     -- U
+  dndOff = 34,    -- I
+  outputOn = 31,  -- O
+  outputOff = 35, -- P
+  micMute = 38,   -- J  (paddle ON  = muted)
+  micLive = 40,   -- K  (paddle OFF = live)
 }
 
 -- ---------------------------------------------------------------------------

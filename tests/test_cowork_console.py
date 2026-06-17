@@ -64,8 +64,10 @@ def test_every_toggle_on_off_pair_is_distinct():
 def test_toggle_chord_helper_selects_edge():
     on = cowork_chords.toggle_chord("toggle_1", True)
     off = cowork_chords.toggle_chord("toggle_1", False)
-    assert on == cowork_chords.HYPER + ("F13",)
-    assert off == cowork_chords.HYPER + ("F14",)
+    # Derive expected from the table so this stays correct if keys change.
+    assert on == cowork_chords.HYPER + (cowork_chords.TOGGLE_CHORDS["toggle_1"]["on"],)
+    assert off == cowork_chords.HYPER + (cowork_chords.TOGGLE_CHORDS["toggle_1"]["off"],)
+    assert on != off
 
 
 def test_three_state_controls_present():
