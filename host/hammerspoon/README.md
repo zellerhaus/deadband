@@ -62,27 +62,33 @@ the integration lives on your machine, in code you own.
 The Hammerspoon config lives in `host/hammerspoon/deadband/`. Get it into your
 `~/.hammerspoon/` directory and require it from your `init.lua`.
 
-**1. Link (or copy) the module into place.** A symlink keeps it tracking the
-repo:
-
-```sh
-ln -s "$(pwd)/host/hammerspoon/deadband" ~/.hammerspoon/deadband
-```
-
-Run that from the firmware repo root. To copy instead of link:
+**1. Copy the module into place.** Copy — do not symlink — the module tree into
+`~/.hammerspoon/`:
 
 ```sh
 cp -R host/hammerspoon/deadband ~/.hammerspoon/deadband
 ```
 
-**2. Require it from `~/.hammerspoon/init.lua`.** Add one line:
+Run that from the firmware repo root. Two caveats, both because of macOS:
+
+- **Copy, not a symlink.** If this repo lives under `~/Documents` (or `~/Desktop`
+  / `~/Downloads`), Hammerspoon cannot read it through a symlink or an absolute
+  `package.path` — macOS privacy (TCC) blocks the app from those folders and the
+  `require` hangs with no error. A plain copy inside `~/.hammerspoon` sidesteps it.
+- **Re-sync after repo changes.** Because it is a copy, edits to the repo modules
+  do not propagate. Re-run the `cp` above (from Terminal, which does have folder
+  access) after changing anything under `host/hammerspoon/deadband`. If you prefer
+  auto-tracking, grant Hammerspoon **Full Disk Access** in System Settings →
+  Privacy & Security, then a symlink works.
+
+**2. Require it from `~/.hammerspoon/init.lua`.**
 
 ```lua
-require("deadband.init")
+require("hs.ipc")      -- optional: lets the `hs` CLI talk to Hammerspoon
+require("deadband")
 ```
 
-If you already have an `init.lua`, append the line. If not, that one line is the
-whole file.
+If you already have an `init.lua`, append the `require("deadband")` line.
 
 **3. Reload.** Open the Hammerspoon menu-bar icon → **Reload Config**, or run
 `hs.reload()` in the Hammerspoon console. The first reload after granting
@@ -96,13 +102,20 @@ listening.
 
 ## Configuration
 
-Open `~/.hammerspoon/deadband/init.lua`. The top-of-file config block holds the
-device names and paths you may need to change:
+Set a `DEADBAND_CONFIG` table in your own `~/.hammerspoon/init.lua` *before*
+`require("deadband")`. These keys merge over the defaults, so list only what you
+change — and they survive a re-sync `cp` (editing the copied module's own config
+block does not):
 
 ```lua
--- Audio device names — must match System Settings → Sound exactly.
-local OUTPUT_PRIMARY   = "External Headphones"
-local OUTPUT_SECONDARY = "Shure MV7"
+DEADBAND_CONFIG = {
+  outputDeviceA  = "External Headphones",  -- toggle_2 OFF; match System Settings → Sound exactly
+  outputDeviceB  = "Shure MV7",            -- toggle_2 ON
+  dndOnShortcut  = "Deadband DND On",      -- a Shortcut you create (Set Focus → DND → On)
+  dndOffShortcut = "Deadband DND Off",
+  coworkApp      = "Claude",
+}
+require("deadband")
 ```
 
 Find your exact device names with:

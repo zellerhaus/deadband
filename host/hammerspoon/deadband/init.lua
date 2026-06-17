@@ -51,6 +51,13 @@ local CONFIG = {
   -- AppleScript-scriptable, so dispatch.lua drives it through System Events.
   coworkApp = "Claude",
 }
+
+-- Optional host override: define a global DEADBAND_CONFIG table in your
+-- ~/.hammerspoon/init.lua BEFORE require("deadband") to personalize any field
+-- above without editing this (shared) file. Provided keys merge over the defaults.
+if type(DEADBAND_CONFIG) == "table" then
+  for k, v in pairs(DEADBAND_CONFIG) do CONFIG[k] = v end
+end
 -- ======================================================================
 
 -- Module resolution: these requires assume the tree lives at
